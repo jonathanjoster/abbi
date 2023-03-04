@@ -1,46 +1,60 @@
-import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
 import speech_recognition as sr
 import datetime
+from absl import app
+from absl import flags
+import openai
+import gtts
+import playsound
+import os
+import json
 
-print('---preparing for setting up of GPT2---')
-# モデルとトークナイザーを読み込む
-tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
-model = GPT2LMHeadModel.from_pretrained("distilgpt2")
+FLAGS = flags.FLAGS
+flags.DEFINE_enum('lang', 'ja', ['ja', 'en'], 'ja / en')
 
-# GPUを使って計算を高速化する
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-print('---GPT2 is ready to use---')
+CONFIG_PATH = './config.json'
+LOG_PATH = './abbi_log.txt'
 
-# ユーザーの入力を受け付ける
-try:
-    with sr.Microphone() as source:
-        listener = sr.Recognizer()
+def conversation(language: str):
+    with open(CONFIG_PATH) as f:
+        openai.api_key = json.load(f)['api-key']
+    print('---ChatGPT is ready to use---')
 
-        print("Listening...")
-        voice = listener.listen(source)
-        voice_text = listener.recognize_google(voice)
-        print('You:', voice_text)
+    # ユーザーの入力を受け付ける
+    try:
+        with sr.Microphone() as source:
+            listener = sr.Recognizer()
 
-        # テキストをトークナイズして、モデルに入力する
-        input_ids = tokenizer.encode(voice_text, return_tensors='pt').to(device)
-        # パディングされた入力シーケンスに対する注意マスクを設定する
-        attention_mask = torch.ones(input_ids.shape, dtype=torch.long, device=device)
-        # モデルにテキストを入力して、出力を生成する
-        output_ids = model.generate(
-            input_ids, temperature=1.0, attention_mask=attention_mask, pad_token_id=tokenizer.eos_token_id,
-            max_length=280,
-            num_beams=5,
-            no_repeat_ngram_size=2,
-            early_stopping=True)
-        # 生成された出力をトークナイズして、テキストに変換する
-        output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        print("Bot:", output_text)
+            print("Listening...")
+            voice = listener.listen(source)
+            _lang = 'ja-JP' if language == 'ja' else 'en-US'
+            voice_text = listener.recognize_google(voice, language=_lang)
+            print('\nYou:', voice_text)
+
+            completion = openai.ChatCompletion.create(
+                model='gpt-3.5-turbo',
+                messages=[{'role': 'user','content': voice_text}]
+            )
+            content = completion['choices'][0]['message']['content']
+            output_text = content.replace('\n', '')
+
+            print("Bot:", output_text)
+            
+            # speech
+            tts = gtts.gTTS(output_text, lang=language)
+            tts.save('gTTS_out.mp3')
+            playsound.playsound('gTTS_out.mp3')
+            os.remove('gTTS_out.mp3')
+            
+            with open(LOG_PATH, 'a+') as f:
+                f.writelines([f'[{datetime.datetime.now().isoformat()}]\n',
+                              f'>>> {voice_text}\n',
+                              f'{output_text}\n\n'])
+    except Exception as e:
+        print(e)
         
-        with open(f'./log.txt', 'a+') as f:
-            f.writelines([f'[{datetime.datetime.now().isoformat()}]\n',
-                          f'>>> {voice_text}\n',
-                          f'{output_text}\n\n'])
-except:
-    print('sorry I could not listen')
+def main(argv):
+    del argv
+    conversation(language=FLAGS.lang)
+        
+if __name__ == '__main__':
+    app.run(main)

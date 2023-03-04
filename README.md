@@ -8,7 +8,12 @@ ABBI, who is named for 'Alexa-B', is under construction.
 
 ```
 conda install speechrecognition
-conda install -c huggingface transformers
+conda install absl-py
+conda install openai
+conda install gtts
+conda install playsound
+pip3 install PyObjC
+and so on
 ```
 
 # Usage
