@@ -11,6 +11,7 @@ import json
 FLAGS = flags.FLAGS
 flags.DEFINE_enum('lang', 'en', ['ja', 'en'], 'ja / en')
 flags.DEFINE_bool('cli', True, 'feed text with CLI', short_name='c')
+flags.DEFINE_bool('no_speech', False, 'speech the output or not')
 
 CONFIG_PATH = './config.json'
 LOG_PATH = './abbi_log.txt'
@@ -23,7 +24,7 @@ def conversation(language: str):
     # ユーザーの入力を受け付ける
     try:
         if FLAGS.cli:
-            _your_text = input('Listening: ')
+            _your_text = input('Text here: ')
         else:
             with sr.Microphone() as source:
                 listener = sr.Recognizer()
@@ -43,12 +44,13 @@ def conversation(language: str):
 
         print("Bot:", output_text)
         
-        # speech
-        tts = gtts.gTTS(output_text, lang=language)
-        tts.save('gTTS_out.mp3')
-        playsound.playsound('gTTS_out.mp3')
-        os.remove('gTTS_out.mp3')
-        
+        if not FLAGS.no_speech:
+            # speech
+            tts = gtts.gTTS(output_text, lang=language)
+            tts.save('gTTS_out.mp3')
+            playsound.playsound('gTTS_out.mp3')
+            os.remove('gTTS_out.mp3')
+
         if os.path.exists(LOG_PATH):
             with open(LOG_PATH, 'a+') as f:
                 f.writelines([f'[{datetime.datetime.now().isoformat()}]\n',
